@@ -32,18 +32,13 @@
     // ═══════════════════════════════════════════════════════════════════════════
     // 設定：Google Apps Script URL（既存）
     // ═══════════════════════════════════════════════════════════════════════════
-    const GAS_URL = "https://script.google.com/macros/s/AKfycbxuo_2JuSYNyfi9YLKiosuBWtg-EAij2TsUSZmMrCteix2w-Qfl5T51FMO8kTedhYon8Q/exec";
+    const GAS_URL = "https://script.google.com/macros/s/AKfycbyk62xuMqp_-hb8gsjfzAhDMe3K7gLOkPl5McVxgynv0zGa1L8mB0Gfdi-J9KzKxbDlJQ/exec";
 
     // ═══════════════════════════════════════════════════════════════════════════
     // 設定：GoogleドライブPDFリンク（4種類）
-    // ⚠️ アップロード後、以下のプレースホルダーを実際のURLに差し替えてください
+    // ⚠️ セキュリティ向上のため、PDFのURLはGoogle Apps Script側で管理し、
+    // HTMLソースコードからは削除しました。
     // ═══════════════════════════════════════════════════════════════════════════
-    const PDF_LINKS = {
-      critical: "https://drive.google.com/file/d/1Wts4PRWwTTjwLV_oMgeQpVi_fHce5BLk/view?usp=sharing",      // 危険水域
-      warning: "https://drive.google.com/file/d/1v717vYOKg0xYPteu50f2DTx8lvw1sniB/view?usp=sharing",       // 要注意
-      improvement: "https://drive.google.com/file/d/1YZ9tp_yWtPtfZS2LVdk6BJkG6oyE9oFn/view?usp=drive_link",   // 改善の余地あり
-      good: "https://drive.google.com/file/d/16z707UvWg6N08ifIUUy2T3_TfstO7oOO/view?usp=sharing",          // 良好
-    };
 
     // ═══════════════════════════════════════════════════════════════════════════
     // データ定義
@@ -450,16 +445,17 @@
     function ResultScreen({ answers, onRestart }) {
       const [email, setEmail] = useState("");
       const [name, setName] = useState("");
+      const [agreed, setAgreed] = useState(false); // [追加] 同意状態の管理
       const [emailSent, setEmailSent] = useState(false);
       const [sending, setSending] = useState(false);
 
       const total = Object.values(answers).reduce((a, b) => a + b, 0);
       const tier = getTier(total);
-      const pdfUrl = PDF_LINKS[tier.id];
+      // const pdfUrl = PDF_LINKS[tier.id]; // 削除: PDFリンクはGAS側で処理
 
       const handleSubmit = async () => {
-        if (!email || !name) {
-          alert("お名前とメールアドレスを入力してください");
+        if (!email || !name || !agreed) {
+          alert("お名前、メールアドレス、および規定への同意が必要です");
           return;
         }
 
@@ -469,17 +465,18 @@
             name,
             email,
             score: total,
-            tier: tier.label,
+            tier: tier.label, // 日本語ラベルを送信
             timestamp: new Date().toISOString(),
           };
 
+          // sendBeaconなどが使えるとベストですが、GASへのPOSTはcors制限があるため
+          // no-corsで送信し、基本的には成功したものとして扱います。
           await fetch(GAS_URL, {
             method: "POST",
             mode: "no-cors",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(payload),
           });
-
           setEmailSent(true);
         } catch (error) {
           console.error("送信エラー:", error);
@@ -489,191 +486,111 @@
         }
       };
 
+      // ボタンが押せるかどうかの判定
+      const canSubmit = name && email && agreed && !sending;
+
       return (
         <div style={{ padding: "20px 20px 32px" }}>
-          {/* スコアヒーロー */}
-          <div
-            style={{
-              background: tier.bg,
-              border: `1px solid ${tier.color}30`,
-              borderRadius: 18,
-              padding: "28px 20px 24px",
-              textAlign: "center",
-              marginBottom: 20,
-            }}
-          >
-            <div style={{ fontSize: 28, marginBottom: 4 }}>{tier.badge}</div>
-            <div style={{ fontSize: 13, color: tier.color, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 8 }}>
-              診断結果
-            </div>
-            <div style={{ fontFamily: "'Noto Serif JP', serif", fontSize: 22, color: "#1a1a2e", fontWeight: 700, marginBottom: 4 }}>
-              {tier.label}
-            </div>
-            <div style={{ fontSize: 14, color: "#5a6a7a", marginBottom: 16 }}>{tier.subtitle}</div>
-            <div style={{ display: "flex", alignItems: "baseline", justifyContent: "center", gap: 4 }}>
-              <span style={{ fontSize: 52, fontWeight: 800, color: tier.color, lineHeight: 1 }}>{total}</span>
-              <span style={{ fontSize: 18, color: "#7a8a9a" }}>/60</span>
-            </div>
-          </div>
+          {!emailSent ? (
+            /* --- 送信前：リード獲得用フォーム --- */
+            <div style={{ background: "#fff", borderRadius: 16, border: "1px solid #eef2f6", padding: "28px 20px", boxShadow: "0 4px 20px rgba(0,0,0,0.08)", textAlign: "center" }}>
+              <h2 style={{ fontSize: "20px", color: "#1a1a2e", marginBottom: "12px", fontFamily: "'Noto Serif JP', serif" }}>
+                診断が完了しました
+              </h2>
+              <p style={{ fontSize: "14px", color: "#5a6a7a", marginBottom: "24px", lineHeight: "1.6" }}>
+                分析結果と詳細レポート（PDF）を<br />ご入力いただいたメールアドレスにお送りします。
+              </p>
 
-          {/* メッセージ */}
-          <div style={{ background: "#fff", borderRadius: 16, border: "1px solid #eef2f6", padding: "20px", marginBottom: 16, boxShadow: "0 2px 8px rgba(0,0,0,0.04)" }}>
-            <p style={{ margin: 0, fontSize: 14, color: "#4a5568", lineHeight: 1.7 }}>{tier.message}</p>
-          </div>
+              <input
+                type="text"
+                placeholder="お名前"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                style={{ width: "100%", padding: "14px", borderRadius: 10, border: "1.5px solid #dde3ea", fontSize: "16px", marginBottom: "12px", outline: "none" }}
+              />
+              <input
+                type="email"
+                placeholder="メールアドレス"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                style={{ width: "100%", padding: "14px", borderRadius: 10, border: "1.5px solid #dde3ea", fontSize: "16px", marginBottom: "16px", outline: "none" }}
+              />
 
-          {/* 事例 */}
-          <div style={{ background: "#f9f7f2", borderRadius: 16, border: "1px solid #efe9dc", padding: "20px", marginBottom: 16 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
-              <span style={{ fontSize: 16 }}>💬</span>
-              <span style={{ fontSize: 13, color: "#8a7a5a", fontWeight: 700 }}>{tier.story.title}</span>
-            </div>
-            <p style={{ margin: "0 0 6px", fontSize: 12, color: "#9a8a6a", fontStyle: "italic" }}>
-              — {tier.story.industry}
-            </p>
-            <p style={{ margin: 0, fontSize: 14, color: "#5a4a2a", lineHeight: 1.7 }}>
-              {tier.story.text}
-            </p>
-          </div>
-
-          {/* メール取得 + PDF表示 */}
-          <div style={{ background: "#fff", borderRadius: 16, border: "1px solid #eef2f6", padding: "20px", marginBottom: 16, boxShadow: "0 2px 8px rgba(0,0,0,0.04)" }}>
-            <h3 style={{ margin: "0 0 4px", fontSize: 15, color: "#1a1a2e" }}>
-              診断結果のPDFを受け取る
-            </h3>
-            <p style={{ margin: "0 0 14px", fontSize: 13, color: "#7a8a9a" }}>
-              詳細レポートをメールでお送りします
-            </p>
-            {!emailSent ? (
-              <>
+              {/* --- チェックボックス部分 --- */}
+              <div style={{ display: "flex", alignItems: "flex-start", gap: "10px", marginBottom: "20px", textAlign: "left" }}>
                 <input
-                  type="text"
-                  placeholder="お名前"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  style={{
-                    width: "100%",
-                    padding: "12px 14px",
-                    borderRadius: 10,
-                    border: "1.5px solid #dde3ea",
-                    fontSize: 14,
-                    boxSizing: "border-box",
-                    marginBottom: 10,
-                    outline: "none",
-                  }}
+                  type="checkbox"
+                  id="privacy"
+                  checked={agreed}
+                  onChange={(e) => setAgreed(e.target.checked)}
+                  style={{ cursor: "pointer", width: "18px", height: "18px", marginTop: "2px" }}
                 />
-                <input
-                  type="email"
-                  placeholder="メールアドレス"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  style={{
-                    width: "100%",
-                    padding: "12px 14px",
-                    borderRadius: 10,
-                    border: "1.5px solid #dde3ea",
-                    fontSize: 14,
-                    boxSizing: "border-box",
-                    marginBottom: 10,
-                    outline: "none",
-                  }}
-                />
-                <button
-                  onClick={handleSubmit}
-                  disabled={sending || !email || !name}
-                  style={{
-                    width: "100%",
-                    padding: "12px",
-                    borderRadius: 10,
-                    border: "none",
-                    background: (email && name && !sending) ? "#2a5e8a" : "#cdd3da",
-                    color: "#fff",
-                    fontSize: 14,
-                    fontWeight: 600,
-                    cursor: (email && name && !sending) ? "pointer" : "default",
-                    transition: "background 0.2s",
-                  }}
-                >
-                  {sending ? "送信中..." : "結果を受け取る"}
-                </button>
-              </>
-            ) : (
-              <div style={{ background: "#eef6fc", borderRadius: 10, padding: "14px", textAlign: "center" }}>
-                <p style={{ margin: 0, fontSize: 14, color: "#2a5e8a", fontWeight: 600 }}>
-                  ✓ ありがとうございます
-                </p>
-                <p style={{ margin: "4px 0 12px", fontSize: 13, color: "#5a6a7a" }}>
-                  {email} へPDFを送付いたします
-                </p>
-                {pdfUrl && !pdfUrl.includes("PLACEHOLDER") && (
-                  <a
-                    href={pdfUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    style={{
-                      display: "inline-block",
-                      padding: "10px 20px",
-                      borderRadius: 8,
-                      background: "#2a5e8a",
-                      color: "#fff",
-                      fontSize: 13,
-                      fontWeight: 600,
-                      textDecoration: "none",
-                      marginTop: 8,
-                    }}
-                  >
-                    📄 今すぐPDFをダウンロード
-                  </a>
-                )}
+                <label htmlFor="privacy" style={{ fontSize: "13px", color: "#4a5568", cursor: "pointer", lineHeight: "1.5" }}>
+                  私は、プライバシーポリシーと個人情報の取り扱いに関する規定に同意します。
+                </label>
               </div>
-            )}
-          </div>
 
-          {/* CTA */}
-          <div style={{ background: "#1a1a2e", borderRadius: 16, padding: "24px 20px", marginBottom: 16 }}>
-            <p style={{ margin: "0 0 16px", fontSize: 14, color: "#c8d4e0", lineHeight: 1.7 }}>
-              今の状況を、一緒に見直しましょう。
-            </p>
-            <a
-              href="https://1planet.jp/contact"
-              target="_blank"
-              rel="noopener noreferrer"
-              style={{
-                display: "block",
-                width: "100%",
-                padding: "14px",
-                borderRadius: 10,
-                border: "none",
-                background: "linear-gradient(135deg, #2a5e8a, #3a7d6a)",
-                color: "#fff",
-                fontSize: 15,
-                fontWeight: 700,
-                cursor: "pointer",
-                boxShadow: "0 2px 10px rgba(0,0,0,0.3)",
-                textAlign: "center",
-                textDecoration: "none",
-              }}
-            >
-              {tier.cta.primary}
-            </a>
-            <p style={{ margin: "12px 0 0", fontSize: 11, color: "#6a7a8a", textAlign: "center" }}>
-              毎月2社限定 | 無理な営業はありません
-            </p>
-          </div>
+              <button
+                onClick={handleSubmit}
+                disabled={!canSubmit}
+                style={{
+                  width: "100%", padding: "16px", borderRadius: 12, border: "none",
+                  background: canSubmit ? "linear-gradient(135deg, #1a1a2e, #2a5e8a)" : "#cdd3da",
+                  color: "#fff", fontSize: "16px", fontWeight: "700",
+                  cursor: canSubmit ? "pointer" : "default",
+                  boxShadow: canSubmit ? "0 4px 12px rgba(26,26,46,0.2)" : "none",
+                  transition: "all 0.3s"
+                }}
+              >
+                {sending ? "送信中..." : "診断結果を受け取る"}
+              </button>
+            </div>
+          ) : (
+            /* --- 送信後：診断結果表示 --- */
+            <>
+              <div style={{ background: "#eef6fc", borderRadius: 16, padding: "20px", marginBottom: 20, textAlign: "center", border: "1px solid #d4e3f0" }}>
+                <div style={{ fontSize: 32, marginBottom: 8 }}>📧</div>
+                <h3 style={{ fontSize: 18, color: "#2a5e8a", marginBottom: 8, fontWeight: 700 }}>送信完了</h3>
+                <p style={{ fontSize: 14, color: "#4a5568", lineHeight: 1.6 }}>
+                  <strong>{email}</strong> 宛に<br />
+                  すべての診断結果と特典レポートをお送りしました。<br />
+                  <span style={{ fontSize: 12, color: "#7a8a9a" }}>※メールが届かない場合は迷惑メールフォルダもご確認ください。</span>
+                </p>
+              </div>
 
-          {/* やり直し */}
-          <button
-            onClick={onRestart}
-            style={{
-              width: "100%",
-              padding: "10px",
-              borderRadius: 10,
-              border: "1.5px solid #dde3ea",
-              background: "#fff",
-              color: "#7a8a9a",
-              fontSize: 13,
-              cursor: "pointer",
-            }}
-          >
+              <div style={{ background: tier.bg, border: `1px solid ${tier.color}30`, borderRadius: 18, padding: "28px 20px 24px", textAlign: "center", marginBottom: 20 }}>
+                <div style={{ fontSize: 13, color: tier.color, fontWeight: 700, letterSpacing: "0.08em", marginBottom: 8 }}>診断結果</div>
+                <div style={{ fontFamily: "'Noto Serif JP', serif", fontSize: 22, color: "#1a1a2e", fontWeight: 700, marginBottom: 4 }}>{tier.label}</div>
+                <div style={{ fontSize: 14, color: "#5a6a7a", marginBottom: 16 }}>{tier.subtitle}</div>
+                <div style={{ display: "flex", alignItems: "baseline", justifyContent: "center", gap: 4 }}>
+                  <span style={{ fontSize: 52, fontWeight: 800, color: tier.color, lineHeight: 1 }}>{total}</span>
+                  <span style={{ fontSize: 18, color: "#7a8a9a" }}>/60</span>
+                </div>
+              </div>
+
+              <div style={{ background: "#fff", borderRadius: 16, border: "1px solid #eef2f6", padding: "20px", marginBottom: 16 }}>
+                <p style={{ margin: 0, fontSize: 14, color: "#4a5568", lineHeight: 1.7 }}>{tier.message}</p>
+              </div>
+
+              <div style={{ background: "#f9f7f2", borderRadius: 16, border: "1px solid #efe9dc", padding: "20px", marginBottom: 16 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+                  <span style={{ fontSize: 13, color: "#8a7a5a", fontWeight: 700 }}>{tier.story.title}</span>
+                </div>
+                <p style={{ margin: "0 0 6px", fontSize: 12, color: "#9a8a6a", fontStyle: "italic" }}>{tier.story.industry}</p>
+                <p style={{ margin: 0, fontSize: 14, color: "#5a4a2a", lineHeight: 1.7 }}>{tier.story.text}</p>
+              </div>
+
+              <div style={{ background: "#1a1a2e", borderRadius: 16, padding: "24px 20px", marginBottom: 16 }}>
+                <p style={{ margin: "0 0 16px", fontSize: 14, color: "#c8d4e0", textAlign: "center" }}>今の状況を、一緒に見直しましょう。</p>
+                <a href="https://1planet.jp/contact" target="_blank" rel="noopener noreferrer"
+                  style={{ display: "block", width: "100%", padding: "14px", borderRadius: 10, background: "linear-gradient(135deg, #2a5e8a, #3a7d6a)", color: "#fff", fontSize: 15, fontWeight: 700, textAlign: "center", textDecoration: "none" }}>
+                  {tier.cta.primary}
+                </a>
+              </div>
+            </>
+          )}
+
+          <button onClick={onRestart} style={{ width: "100%", padding: "10px", borderRadius: 10, border: "1.5px solid #dde3ea", background: "#fff", color: "#7a8a9a", fontSize: 13, cursor: "pointer" }}>
             もう一度診断する
           </button>
         </div>
