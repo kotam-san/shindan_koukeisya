@@ -80,7 +80,7 @@ export default function ResultScreen({ answers, onRestart }) {
               style={{ cursor: "pointer", width: "18px", height: "18px", marginTop: "2px" }}
             />
             <label htmlFor="privacy" style={{ fontSize: "13px", color: "#4a5568", cursor: "pointer", lineHeight: "1.5" }}>
-              私は、プライバシーポリシーと個人情報の取り扱いに関する規定に同意します。
+              私は、<a href="https://www.1planet.jp/privacy" target="_blank" rel="noopener noreferrer" style={{ color: "#2a5e8a", textDecoration: "underline" }}>プライバシーポリシー</a>と個人情報の取り扱いに関する規定に同意します。
             </label>
           </div>
 
