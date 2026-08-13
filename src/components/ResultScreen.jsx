@@ -35,6 +35,20 @@ export default function ResultScreen({ answers, onRestart }) {
         body: JSON.stringify(payload),
       })
       setEmailSent(true)
+
+      // 親ページ（1planet.jp）へ診断完了を通知する。
+      // 親側の Code Injection が受け取って GA4 の shindan_complete イベントを送る。
+      // ここは計測目的なので、失敗しても診断本体の処理を絶対に止めない。
+      // 個人情報（氏名・メール）は送らない。スコアと判定ラベルのみ。
+      try {
+        const message = { type: "shindan_complete", score: total, tier: tier.label }
+        // targetOrigin が一致しない相手には黙って破棄されるため、www 有無の両方に送る
+        for (const origin of ["https://www.1planet.jp", "https://1planet.jp"]) {
+          window.parent.postMessage(message, origin)
+        }
+      } catch (e) {
+        console.warn("計測通知に失敗（診断本体には影響しません）:", e)
+      }
     } catch (error) {
       console.error("送信エラー:", error)
       alert("送信に失敗しました。もう一度お試しください。")
